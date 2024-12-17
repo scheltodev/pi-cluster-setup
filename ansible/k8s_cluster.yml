@@ -1,0 +1,113 @@
+---
+- name: k3s Lightweight Kubernetes Installation
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Update and upgrade system packages
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - software-properties-common
+          - ca-certificates
+          - gnupg
+        state: present
+
+    - name: Disable swap
+      command: swapoff -a
+
+    - name: Ensure swap is disabled permanently
+      lineinfile:
+        path: /etc/fstab
+        regexp: '^.*\sswap\s.*$'
+        state: absent
+
+    - name: Load kernel modules for k3s
+      shell: |
+        modprobe overlay
+        modprobe br_netfilter
+
+    - name: Ensure kernel modules are loaded on boot
+      copy:
+        content: |
+          overlay
+          br_netfilter
+        dest: /etc/modules-load.d/k3s.conf
+
+    - name: Set sysctl parameters required by k3s
+      copy:
+        content: |
+          net.bridge.bridge-nf-call-ip6tables = 1
+          net.bridge.bridge-nf-call-iptables = 1
+        dest: /etc/sysctl.d/k3s.conf
+
+    - name: Apply sysctl parameters
+      command: sysctl --system
+
+    - name: Install k3s on master node
+      shell: |
+        curl -sfL https://get.k3s.io | sh -
+      when: "'master_group' in group_names"
+
+    - name: Get k3s token for worker nodes
+      shell: |
+        cat /var/lib/rancher/k3s/server/node-token
+      register: k3s_token
+      when: "'master_group' in group_names"
+      run_once: true
+
+    - name: Fetch kubeconfig from master node
+      fetch:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: ./kubeconfig_master.yaml
+        flat: yes
+      when: "'master_group' in group_names"
+      run_once: true
+
+    - name: Ensure .kube directory exists on worker nodes
+      file:
+        path: /home/{{ ansible_user }}/.kube
+        state: directory
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'
+        mode: '0700'
+      when: "'worker_group' in group_names"
+
+    - name: Distribute kubeconfig to worker nodes
+      copy:
+        src: ./kubeconfig_master.yaml
+        dest: /home/{{ ansible_user }}/.kube/config
+        owner: '{{ ansible_user }}'
+        group: '{{ ansible_user }}'
+        mode: '0600'
+      when: "'worker_group' in group_names"
+
+    - name: Update kubeconfig server endpoint for worker nodes
+      replace:
+        path: /home/{{ ansible_user }}/.kube/config
+        regexp: '127.0.0.1'
+        replace: "{{ hostvars['master']['ansible_host'] }}"
+      when: "'worker_group' in group_names"
+
+    - name: Install k3s on worker nodes
+      shell: |
+        curl -sfL https://get.k3s.io | K3S_URL=https://{{ hostvars['master']['ansible_host'] }}:6443 K3S_TOKEN={{ hostvars['master']['k3s_token']['stdout'] }} sh -
+      when: "'worker_group' in group_names"
+
+- name: Verify k3s Cluster Status
+  hosts: master_group
+  become: true
+
+  tasks:
+    - name: Get node status
+      command: kubectl get nodes
+      register: nodes_status
+
+    - name: Show node status
+      debug:
+        msg: '{{ nodes_status.stdout }}'

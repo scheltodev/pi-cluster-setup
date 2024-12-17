@@ -1,0 +1,20 @@
+all:
+  hosts:
+    master:
+      ansible_host: rsp1schelto
+      ansible_user: schelto
+    worker1:
+      ansible_host: rsp2schelto
+      ansible_user: schelto
+    worker2:
+      ansible_host: rsp3
+      ansible_user: schelto
+
+  children:
+    master_group:
+      hosts:
+        master:
+    worker_group:
+      hosts:
+        worker1:
+        worker2:
