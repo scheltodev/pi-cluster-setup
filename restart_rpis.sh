@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Liste der Raspberry Pi-IPs
-RPI_HOSTS=("192.168.2.112" "192.168.2.113" "1192.168.2.114") # Ersetze durch die tatsächlichen IPs
+RPI_HOSTS=("192.168.2.112" "192.168.2.113" "192.168.2.114") # Ersetze durch die tatsächlichen IPs
 
 # Benutzername
 USER="schelto"
