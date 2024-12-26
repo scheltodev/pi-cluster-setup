@@ -114,6 +114,24 @@
   hosts: master_group
   become: true
   tasks:
+    - name: Ensure .kube directory exists on master node
+      file:
+        path: /home/{{ ansible_user }}/.kube
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0700"
+
+    - name: Copy kubeconfig from master node to user directory
+      become: true
+      copy:
+        src: /etc/rancher/k3s/k3s.yaml
+        dest: /home/{{ ansible_user }}/.kube/config
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: "0600"
+        remote_src: yes
+
     - name: Get node status with TLS validation
       command: sudo kubectl get nodes --kubeconfig /home/{{ ansible_user }}/.kube/config
       register: nodes_status
